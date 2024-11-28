@@ -15,7 +15,7 @@
 # Vérifier le repertoire à purger lors de la rotation des sauvgerdes
 
 #Chemin de destination des fichiers de sauvegarde
-BACKUP_DIR="/var/backups/mysql/"
+BACKUP_DIR="/home/sauv/"
 
 #Nom d'hôte ou adress IP du serveur de base de données
 BACKUP_HOST="localhost"
@@ -24,7 +24,7 @@ BACKUP_HOST="localhost"
 BACKUP_USER="root"
 
 #Mot de passe de l'utilisateur de la base de données
-BACKUP_PASSWORD="xxx"
+BACKUP_PASSWORD="XXX"
 
 
 #### Paramètres
@@ -58,7 +58,7 @@ if [ -z "$SUDO_USER" ]; then
 fi 
 
 ### Check Mysql
-PING=$(mysqladmin ping -h "${BACKUP_HOST}" --user="${BACKUP_USER}" --password="${BACKUP_PASSWORD}" 2>&1)
+PING=$(mariadb-admin ping -h "${BACKUP_HOST}" --user="${BACKUP_USER}" --password="${BACKUP_PASSWORD}" 2>&1)
 if [ "$PING" != "mysqld is alive" ]; then
     echo "Error: Unable to connected to MySQL Server, exiting !!"
     echo $PING
@@ -77,7 +77,7 @@ DESTINATION_DIR="${BACKUP_DIR}${DESTINATION_DIR}-${BACKUP_HOST}"
 [ ! -d "$DESTINATION_DIR" ] && mkdir -p $DESTINATION_DIR
 
 #Récupération de la liste des bases de données
-databases=$(mysql --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW DATABASES;" --batch)
+databases=$(mariadb --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW DATABASES;" --batch)
 
 #Vérification si on a bien des bases de données
 if [ -z "$databases" ]; then
@@ -114,17 +114,17 @@ do
 
         #Mode 1 file per table
         if [[ $MODE = 2 ]]; then
-            tables=$(mysql ${database} --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW TABLES;" --batch | tail -n +2)
+            tables=$(mariadb ${database} --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW TABLES;" --batch | tail -n +2)
             
             for table in $tables;
                 do 
                     #Execution du dump avec gestion de la compression GZ
                     if [[ "$GZIP_COMPRESSION" = "Y" || "$GZIP_COMPRESSION" = "y" ]]; then
                         FILENAME="$table.sql.gz"
-                        mysqldump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME | gzip -c > $FILENAME
+                        mariadb-dump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME | gzip -c > $FILENAME
                     else #Execution du dump sans compression
                         FILENAME="$table.sql"
-                        mysqldump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME
+                        mariadb-dump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME
                     fi
 
                     #On calcule la taille du fichier sauvegardé
@@ -143,10 +143,10 @@ do
             #Execution du dump avec gestion de la compression GZ
             if [[ "$GZIP_COMPRESSION" = "Y" || "$GZIP_COMPRESSION" = "y" ]]; then
                 FILENAME="$database.sql.gz"
-                mysqldump $MYSQLDUMP_CDM --databases $database > $FILENAME | gzip -c > $FILENAME
+                mariadb-dump $MYSQLDUMP_CDM --databases $database > $FILENAME | gzip -c > $FILENAME
             else #Execution du dump sans compression
                 FILENAME="$database.sql"
-                mysqldump $MYSQLDUMP_CDM --databases $database > $FILENAME
+                mariadb-dump $MYSQLDUMP_CDM --databases $database > $FILENAME
             fi
 
             #On calcule la taille du fichier sauvegardé
