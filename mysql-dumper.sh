@@ -1,4 +1,8 @@
 #!/bin/bash
+# v1.2
+# Compatibilité avec MariaDB pour les commandes de sauvegarde (mariadb et mariadb-dump). 
+# Cette mise à jour permet de basculer facilement entre MySQL et MariaDB en 
+# modifiant les variables BACKUP_CMD, BACKUP_CMD_DUMP et BACKUP_CMD_ADM
 # v1.1
 # Il est désormais possible de faire un backup par table ou par base au choix (MODE 1 / 2)
 # v1.0
@@ -15,7 +19,7 @@
 # Vérifier le repertoire à purger lors de la rotation des sauvgerdes
 
 #Chemin de destination des fichiers de sauvegarde
-BACKUP_DIR="/var/backups/mysql/"
+BACKUP_DIR="/var/backups/databases/"
 
 #Nom d'hôte ou adress IP du serveur de base de données
 BACKUP_HOST="localhost"
@@ -25,6 +29,17 @@ BACKUP_USER="root"
 
 #Mot de passe de l'utilisateur de la base de données
 BACKUP_PASSWORD="xxx"
+
+### Executables : Mysql/MariaDB
+
+#Executable Exemple : mysqldor mariadb
+BACKUP_CMD="mysql"
+
+#Executable DUMP Exemple : mysqldump or mariadb-dump
+BACKUP_CMD_DUMP="mysqldump"
+
+#Executable Admin Exemple : mysqladmin or mariadb-admin
+BACKUP_CMD_ADM="mysqladmin"
 
 
 #### Paramètres
@@ -57,8 +72,24 @@ if [ -z "$SUDO_USER" ]; then
     exit 13
 fi 
 
+# Contrôle des commandes pour éviter les erreurs
+if [[ "$BACKUP_CMD" != "mysql" && "$BACKUP_CMD" != "mariadb" ]]; then
+    echo "Erreur : BACKUP_CMD doit être 'mysql' ou 'mariadb'."
+    exit 1
+fi
+
+if [[ "$BACKUP_CMD_DUMP" != "mysqldump" && "$BACKUP_CMD_DUMP" != "mariadb-dump" ]]; then
+    echo "Erreur : BACKUP_CMD_DUMP doit être 'mysqldump' ou 'mariadb-dump'."
+    exit 1
+fi
+
+if [[ "$BACKUP_CMD_ADM" != "mysqladmin" && "$BACKUP_CMD_ADM" != "mariadb-admin" ]]; then
+    echo "Erreur : BACKUP_CMD_ADM doit être 'mysqladmin' ou 'mariadb-admin'."
+    exit 1
+fi
+
 ### Check Mysql
-PING=$(mysqladmin ping -h "${BACKUP_HOST}" --user="${BACKUP_USER}" --password="${BACKUP_PASSWORD}" 2>&1)
+PING=$($BACKUP_CMD_ADM ping -h "${BACKUP_HOST}" --user="${BACKUP_USER}" --password="${BACKUP_PASSWORD}" 2>&1)
 if [ "$PING" != "mysqld is alive" ]; then
     echo "Error: Unable to connected to MySQL Server, exiting !!"
     echo $PING
@@ -77,7 +108,7 @@ DESTINATION_DIR="${BACKUP_DIR}${DESTINATION_DIR}-${BACKUP_HOST}"
 [ ! -d "$DESTINATION_DIR" ] && mkdir -p $DESTINATION_DIR
 
 #Récupération de la liste des bases de données
-databases=$(mysql --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW DATABASES;" --batch)
+databases=$($BACKUP_CMD --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW DATABASES;" --batch)
 
 #Vérification si on a bien des bases de données
 if [ -z "$databases" ]; then
@@ -114,23 +145,23 @@ do
 
         #Mode 1 file per table
         if [[ $MODE = 2 ]]; then
-            tables=$(mysql ${database} --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW TABLES;" --batch | tail -n +2)
+            tables=$($BACKUP_CMD ${database} --host="$BACKUP_HOST" --user="$BACKUP_USER" --password="$BACKUP_PASSWORD" --execute="SHOW TABLES;" --batch | tail -n +2)
             
             for table in $tables;
                 do 
                     #Execution du dump avec gestion de la compression GZ
                     if [[ "$GZIP_COMPRESSION" = "Y" || "$GZIP_COMPRESSION" = "y" ]]; then
                         FILENAME="$table.sql.gz"
-                        mysqldump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME | gzip -c > $FILENAME
+                        $BACKUP_CMD_DUMP $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME | gzip -c > $FILENAME
                     else #Execution du dump sans compression
                         FILENAME="$table.sql"
-                        mysqldump $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME
+                        $BACKUP_CMD_DUMP $MYSQLDUMP_CDM --databases $database --tables $table > $FILENAME
                     fi
 
                     #On calcule la taille du fichier sauvegardé
                     table_filesize=$(du -h "$FILENAME" | awk '{ print $1}')
                     if [[ "$VERBOSE" = "Y" ]]; then 
-                        echo $table_filesize" sauvegardés"
+                        echo $table" : "$table_filesize" sauvegardés"
                     fi
                 done
         else #mode 1 file per database
@@ -143,10 +174,10 @@ do
             #Execution du dump avec gestion de la compression GZ
             if [[ "$GZIP_COMPRESSION" = "Y" || "$GZIP_COMPRESSION" = "y" ]]; then
                 FILENAME="$database.sql.gz"
-                mysqldump $MYSQLDUMP_CDM --databases $database > $FILENAME | gzip -c > $FILENAME
+                $BACKUP_CMD_DUMP $MYSQLDUMP_CDM --databases $database > $FILENAME | gzip -c > $FILENAME
             else #Execution du dump sans compression
                 FILENAME="$database.sql"
-                mysqldump $MYSQLDUMP_CDM --databases $database > $FILENAME
+                $BACKUP_CMD_DUMP $MYSQLDUMP_CDM --databases $database > $FILENAME
             fi
 
             #On calcule la taille du fichier sauvegardé
